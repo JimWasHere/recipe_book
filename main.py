@@ -8,7 +8,7 @@ from sqlalchemy.orm import relationship
 
 from flask_login import UserMixin, login_user, LoginManager, login_required, current_user, logout_user
 from flask_gravatar import Gravatar
-# from forms import CreatePostForm, RegisterForm, LoginForm, CommentForm
+from forms import CreateRecipeForm, RegisterForm, LoginForm, CommentForm
 from functools import wraps
 
 import os
@@ -106,6 +106,52 @@ def get_all_recipes():
     recipes = None
     return render_template("index.html", all_recipes=recipes)
 
+
+@app.route('/register', methods=["POST", "GET"])
+def register():
+    form = RegisterForm()
+
+    if form.validate_on_submit():
+        if User.query.filter_by(email=form.email.data).first():
+            flash("You've already signed up, try logging in instead. :)")
+            return redirect(url_for('login'))
+
+        hash_and_salted_password = generate_password_hash(
+            form.password.data,
+            method="pbkdf2:sha256",
+            salt_length=8
+        )
+        new_user = User(
+            email=form.email.data,
+            name=form.name.data,
+            password=hash_and_salted_password,
+        )
+        db.session.add(new_user)
+        db.session.commit()
+
+        login_user(new_user)
+        return redirect(url_for("get_all_recipes"))
+    return render_template("register.html", form=form)
+
+
+@app.route('/login', methods=['POST', 'GET'])
+def login():
+    form = LoginForm()
+    if form.validate_on_submit():
+        email = form.email.data
+        password = form.password.data
+
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            flash("That email or does not exist in the system.")
+            return redirect(url_for('login'))
+        elif not check_password_hash(user.password, password):
+            flash("Incorrect Password")
+            return redirect(url_for('login'))
+        else:
+            login_user(user)
+            return redirect(url_for('get_all_recipes'))
+        return render_template("login.html", form=form)
 
 if __name__ == "__main__":
     app.run(debug=True)
